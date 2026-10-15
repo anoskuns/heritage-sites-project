@@ -1,0 +1,30 @@
+@import "tailwindcss";
+@import "maplibre-gl/dist/maplibre-gl.css";
+
+/* MapLibre map styles */
+.maplibregl-map {
+  width: 100% !important;
+  height: 100% !important;
+  font-family: inherit;
+}
+
+.maplibregl-canvas {
+  outline: none;
+}
+
+/* Custom MapLibre Popup Styling matching Heritage aesthetic */
+.heritage-map-popup .maplibregl-popup-content {
+  padding: 0;
+  border-radius: 1rem;
+  overflow: hidden;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(217, 119, 6, 0.25);
+  background: white;
+}
+
+.heritage-map-popup .maplibregl-popup-close-button {
+  padding: 4px 8px;
+  font-size: 16px;
+  color: #78350f;
+  outline: none;
+}
