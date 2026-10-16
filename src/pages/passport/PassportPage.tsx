@@ -9,31 +9,38 @@ import {
   AlertCircle,
   RefreshCw,
   Award,
+  RotateCcw,
 } from 'lucide-react'
 import { useAuth } from '../../features/authentication'
 import { useTranslation } from '../../i18n'
 import {
   fetchUserPassport,
+  fetchGuestPassport,
   PassportStampCard,
   type UserPassportData,
+  type PassportItem,
 } from '../../features/passport'
+import {
+  revokeHeritageSiteUnlock,
+  revokeAllHeritageSiteUnlocks,
+} from '../../features/qr-unlock'
+import { useDemoMode } from '../../services/demoModeService'
 
 export function PassportPage() {
   const { user, profile } = useAuth()
   const { t, language } = useTranslation()
+  const { isDemoMode } = useDemoMode()
 
   const [passportData, setPassportData] = useState<UserPassportData | null>(null)
   const [isLoading, setIsLoading] = useState<boolean>(true)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   const loadPassport = useCallback(async () => {
-    if (!user) return
-
     setIsLoading(true)
     setErrorMessage(null)
 
     try {
-      const data = await fetchUserPassport(user.id)
+      const data = user ? await fetchUserPassport(user.id) : await fetchGuestPassport()
       setPassportData(data)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : t.errors.generic
@@ -43,13 +50,29 @@ export function PassportPage() {
     }
   }, [user, t])
 
+  // Listen to unlock / revoke / memory events for real-time passport updates
+  useEffect(() => {
+    const handleUpdate = () => {
+      loadPassport()
+    }
+    window.addEventListener('heritage_site_unlocked', handleUpdate)
+    window.addEventListener('heritage_passport_revoked', handleUpdate)
+    window.addEventListener('passport_stamp_revoked', handleUpdate)
+    window.addEventListener('heritage_memory_updated', handleUpdate)
+    return () => {
+      window.removeEventListener('heritage_site_unlocked', handleUpdate)
+      window.removeEventListener('heritage_passport_revoked', handleUpdate)
+      window.removeEventListener('passport_stamp_revoked', handleUpdate)
+      window.removeEventListener('heritage_memory_updated', handleUpdate)
+    }
+  }, [loadPassport])
+
   useEffect(() => {
     let ignore = false
 
     async function init() {
-      if (!user) return
       try {
-        const data = await fetchUserPassport(user.id)
+        const data = user ? await fetchUserPassport(user.id) : await fetchGuestPassport()
         if (!ignore) setPassportData(data)
       } catch (err: unknown) {
         if (!ignore) {
@@ -66,6 +89,37 @@ export function PassportPage() {
       ignore = true
     }
   }, [user, t])
+
+  // Handle revoking a single stamp for QA testing
+  const handleRevokeItem = async (item: PassportItem) => {
+    const name = language === 'vi' ? item.nameVi : item.nameEn
+    const confirmed = window.confirm(
+      `Bạn có chắc chắn muốn thu hồi con dấu "${name}" không?\n\nThao tác này dùng để kiểm thử lại luồng quét mã và mở khóa con dấu.`
+    )
+    if (!confirmed) return
+
+    try {
+      await revokeHeritageSiteUnlock(item.siteId, name, user?.id, item.slug)
+      await loadPassport()
+    } catch (err) {
+      console.error('Failed to revoke stamp:', err)
+    }
+  }
+
+  // Handle resetting all stamps for QA testing
+  const handleResetAllStamps = async () => {
+    const confirmed = window.confirm(
+      'Bạn có chắc chắn muốn thu hồi toàn bộ con dấu trong Hộ chiếu để kiểm thử lại từ đầu không?'
+    )
+    if (!confirmed) return
+
+    try {
+      await revokeAllHeritageSiteUnlocks(user?.id)
+      await loadPassport()
+    } catch (err) {
+      console.error('Failed to reset all stamps:', err)
+    }
+  }
 
   // Loading skeleton
   if (isLoading) {
@@ -138,10 +192,18 @@ export function PassportPage() {
 
             <div className="space-y-1">
               <h1 className="text-2xl sm:text-3xl font-black tracking-tight">
-                {profile?.display_name || user?.email?.split('@')[0]}
+                {user
+                  ? profile?.display_name || user?.email?.split('@')[0]
+                  : language === 'vi'
+                    ? 'Hộ chiếu Du Khách'
+                    : 'Guest Passport'}
               </h1>
               <p className="text-xs sm:text-sm text-amber-200/80">
-                {t.passport.subtitle}
+                {user
+                  ? t.passport.subtitle
+                  : language === 'vi'
+                    ? 'Bộ sưu tập con dấu di sản được lưu trữ trên thiết bị của bạn'
+                    : 'Heritage stamps collected and stored on this device'}
               </p>
             </div>
           </div>
@@ -213,6 +275,26 @@ export function PassportPage() {
         </div>
       </div>
 
+      {/* Guest Banner if not logged in */}
+      {!user && (
+        <div className="p-4 rounded-2xl bg-[#F7F0E2] border border-[#D6AD60]/40 text-[#4A3B32] flex flex-col sm:flex-row items-center justify-between gap-3 text-xs sm:text-sm shadow-xs">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-[#8B2E1E] shrink-0" />
+            <span>
+              {language === 'vi'
+                ? 'Bạn đang lưu tem vào Hộ chiếu Khách trên thiết bị này. Đăng nhập để đồng bộ vĩnh viễn lên đám mây!'
+                : 'Stamps are saved to your guest passport on this device. Sign in to permanently sync to the cloud!'}
+            </span>
+          </div>
+          <Link
+            to="/auth?redirectTo=/passport"
+            className="px-4 py-2 rounded-xl bg-[#8B2E1E] hover:bg-[#732619] text-white font-semibold text-xs whitespace-nowrap transition-colors shadow-xs"
+          >
+            {language === 'vi' ? 'Đăng nhập / Đăng ký' : 'Sign In / Sign Up'}
+          </Link>
+        </div>
+      )}
+
       {/* Main Content Area */}
       {!hasItems ? (
         /* Empty State */
@@ -241,18 +323,35 @@ export function PassportPage() {
       ) : (
         /* Passport Stamp Grid */
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-base sm:text-lg font-bold text-gray-900 flex items-center gap-2">
               <span>{t.passport.title}</span>
               <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900">
                 {items.length}
               </span>
             </h2>
+
+            {/* QA Testing Reset Button (Only visible when Demo Mode is Active) */}
+            {isDemoMode && (
+              <button
+                type="button"
+                onClick={handleResetAllStamps}
+                className="text-xs px-3 py-1.5 rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 text-red-700 font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+                title="Thu hồi toàn bộ con dấu để test lại quy trình mở khóa"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-red-600" />
+                <span>Đặt lại toàn bộ (Test)</span>
+              </button>
+            )}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {items.map((item) => (
-              <PassportStampCard key={item.id} item={item} />
+              <PassportStampCard
+                key={item.id}
+                item={item}
+                onRevoke={isDemoMode ? handleRevokeItem : undefined}
+              />
             ))}
           </div>
         </div>

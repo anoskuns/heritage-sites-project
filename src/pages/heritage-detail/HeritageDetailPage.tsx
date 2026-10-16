@@ -14,6 +14,7 @@ import {
   Sparkles,
   AlertCircle,
   RefreshCw,
+  Layers,
 } from 'lucide-react'
 import { useAuth } from '../../features/authentication'
 import { useTranslation } from '../../i18n'
@@ -21,6 +22,7 @@ import {
   fetchHeritageDetail,
   type HeritageDetailData,
 } from '../../features/heritage'
+import { saveLocalUnlockedStamp } from '../../features/passport/passportStorageService'
 import { MemoriesSection } from '../../features/memories'
 
 export function HeritageDetailPage() {
@@ -92,6 +94,21 @@ export function HeritageDetailPage() {
       ignore = true
     }
   }, [slug, user, t])
+
+  // Listen to unlock / revoke / memory events to synchronize state in real time
+  useEffect(() => {
+    const handleUpdate = () => {
+      loadDetail()
+    }
+    window.addEventListener('heritage_site_unlocked', handleUpdate)
+    window.addEventListener('heritage_passport_revoked', handleUpdate)
+    window.addEventListener('heritage_memory_updated', handleUpdate)
+    return () => {
+      window.removeEventListener('heritage_site_unlocked', handleUpdate)
+      window.removeEventListener('heritage_passport_revoked', handleUpdate)
+      window.removeEventListener('heritage_memory_updated', handleUpdate)
+    }
+  }, [loadDetail])
 
   // Audio player handlers
   const handleTogglePlayAudio = () => {
@@ -168,7 +185,17 @@ export function HeritageDetailPage() {
     )
   }
 
-  const { site, collection, isUnlocked, unlockedAt } = detailData
+  const { site, collection, isUnlocked, unlockedAt, sections } = detailData
+
+  const handleQuickUnlockTest = () => {
+    saveLocalUnlockedStamp(site.id, site.slug, user?.id)
+    window.dispatchEvent(
+      new CustomEvent('heritage_site_unlocked', {
+        detail: { siteId: site.id, siteSlug: site.slug, userId: user?.id },
+      })
+    )
+    loadDetail()
+  }
 
   const siteName = language === 'vi' ? site.name_vi : site.name_en
   const siteStory = language === 'vi' ? site.story_vi : site.story_en
@@ -297,9 +324,19 @@ export function HeritageDetailPage() {
               <p className="text-sm font-bold text-gray-900">
                 {t.heritageDetail.isLocked}
               </p>
-              <p className="text-xs text-gray-500">
-                {t.qrUnlock.subtitle}
-              </p>
+              <div className="flex items-center gap-2 flex-wrap text-xs text-gray-500">
+                <span>{t.qrUnlock.subtitle}</span>
+                <span className="text-gray-300">•</span>
+                <button
+                  type="button"
+                  onClick={handleQuickUnlockTest}
+                  className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 hover:text-amber-950 underline cursor-pointer"
+                  title="Thử nghiệm mở khóa con dấu này để xem trải nghiệm và đăng tải ảnh kỷ niệm"
+                >
+                  <Sparkles className="w-3 h-3 text-amber-600" />
+                  <span>Mở khóa thử nghiệm</span>
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -416,6 +453,53 @@ export function HeritageDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Rich In-depth Detailed Sections (Bilingual Blocks) */}
+      {sections && sections.length > 0 && (
+        <div className="space-y-4 animate-fadeIn">
+          <div className="flex items-center gap-2 px-1">
+            <div className="w-7 h-7 rounded-lg bg-amber-100 border border-amber-300 flex items-center justify-center text-[#8B2E1E]">
+              <Layers className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 className="text-base sm:text-lg font-serif font-black tracking-tight text-[#2D2723]">
+                {language === 'vi' ? 'Khám phá chi tiết di tích & kiến trúc' : 'In-depth Heritage & Architecture Details'}
+              </h2>
+              <p className="text-[11px] text-gray-500">
+                {language === 'vi' ? 'Các đề mục tư liệu văn hóa và điểm nhấn di sản' : 'Cultural records and notable highlights'}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4">
+            {sections.map((sec, idx) => {
+              const secTitle = language === 'vi' ? sec.titleVi || sec.titleEn : sec.titleEn || sec.titleVi
+              const secBody = language === 'vi' ? sec.bodyVi || sec.bodyEn : sec.bodyEn || sec.bodyVi
+              if (!secTitle && !secBody) return null
+
+              return (
+                <div
+                  key={sec.id || idx}
+                  className="bg-white border border-[#E8DECB] rounded-3xl p-6 sm:p-7 space-y-3 shadow-2xs hover:shadow-xs transition-all"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-6 h-6 rounded-full bg-gradient-to-br from-[#8B2E1E] to-[#6A1E14] text-[#F7F0E2] text-xs font-bold font-serif flex items-center justify-center shrink-0">
+                      {idx + 1}
+                    </span>
+                    <h3 className="text-base sm:text-lg font-serif font-bold text-[#8B2E1E]">
+                      {secTitle}
+                    </h3>
+                  </div>
+
+                  <p className="text-sm sm:text-base text-gray-700 leading-relaxed whitespace-pre-line pl-0 sm:pl-8.5">
+                    {secBody}
+                  </p>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Memories Section (FR-10) */}
       <MemoriesSection

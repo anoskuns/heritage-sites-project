@@ -20,6 +20,7 @@ export interface Database {
           display_name: string
           avatar_url: string | null
           preferred_language: 'vi' | 'en'
+          role: 'user' | 'admin'
           created_at: string
           updated_at: string
         }
@@ -28,6 +29,7 @@ export interface Database {
           display_name: string
           avatar_url?: string | null
           preferred_language?: 'vi' | 'en'
+          role?: 'user' | 'admin'
           created_at?: string
           updated_at?: string
         }
@@ -36,6 +38,7 @@ export interface Database {
           display_name?: string
           avatar_url?: string | null
           preferred_language?: 'vi' | 'en'
+          role?: 'user' | 'admin'
           created_at?: string
           updated_at?: string
         }
@@ -185,7 +188,10 @@ export interface Database {
           id: string
           design_id: string
           qr_token_hash: string
-          status: 'active' | 'revoked'
+          serial_code: string | null
+          claimed_by_user_id: string | null
+          claimed_at: string | null
+          status: 'available' | 'active' | 'claimed' | 'revoked'
           created_at: string
           updated_at: string
         }
@@ -193,7 +199,10 @@ export interface Database {
           id?: string
           design_id: string
           qr_token_hash: string
-          status?: 'active' | 'revoked'
+          serial_code?: string | null
+          claimed_by_user_id?: string | null
+          claimed_at?: string | null
+          status?: 'available' | 'active' | 'claimed' | 'revoked'
           created_at?: string
           updated_at?: string
         }
@@ -201,7 +210,10 @@ export interface Database {
           id?: string
           design_id?: string
           qr_token_hash?: string
-          status?: 'active' | 'revoked'
+          serial_code?: string | null
+          claimed_by_user_id?: string | null
+          claimed_at?: string | null
+          status?: 'available' | 'active' | 'claimed' | 'revoked'
           created_at?: string
           updated_at?: string
         }
@@ -520,6 +532,11 @@ export type PreviewQrTokenSuccess = {
   }
   is_unlocked: boolean
   pin_item_id: string
+  serial_code?: string | null
+  status?: string
+  claimed_by_other?: boolean
+  claimer_name?: string | null
+  claimed_at?: string | null
 }
 
 export type PreviewQrTokenFailure = {
@@ -535,12 +552,15 @@ export type UnlockHeritageSiteSuccess = {
   newly_unlocked: boolean
   site_id: string
   pin_item_id: string
+  serial_code?: string | null
 }
 
 export type UnlockHeritageSiteFailure = {
   success: false
-  error_code: 'UNAUTHORIZED' | 'INVALID_TOKEN' | 'REVOKED_TOKEN' | 'SITE_UNPUBLISHED'
+  error_code: 'UNAUTHORIZED' | 'INVALID_TOKEN' | 'REVOKED_TOKEN' | 'SITE_UNPUBLISHED' | 'ALREADY_CLAIMED_BY_ANOTHER'
   message: string
+  serial_code?: string | null
+  claimed_at?: string | null
 }
 
 export type UnlockHeritageSiteResponse = UnlockHeritageSiteSuccess | UnlockHeritageSiteFailure

@@ -14,7 +14,7 @@ CREATE OR REPLACE FUNCTION public.preview_qr_token(raw_token TEXT)
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 DECLARE
     v_token_hash TEXT;
@@ -23,8 +23,8 @@ DECLARE
     v_is_unlocked BOOLEAN := false;
     v_current_user UUID;
 BEGIN
-    -- 1. Hash the raw token with SHA-256
-    v_token_hash := encode(digest(raw_token, 'sha256'), 'hex');
+    -- 1. Hash the raw token with SHA-256 (casting raw_token to bytea for digest)
+    v_token_hash := encode(extensions.digest(raw_token::bytea, 'sha256'), 'hex');
 
     -- 2. Look up pin_item by hash
     SELECT pi.id, pi.status, pi.design_id
@@ -115,7 +115,7 @@ CREATE OR REPLACE FUNCTION public.unlock_heritage_site(raw_token TEXT)
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 DECLARE
     v_current_user UUID;
@@ -136,8 +136,8 @@ BEGIN
         );
     END IF;
 
-    -- 2. Hash the raw token
-    v_token_hash := encode(digest(raw_token, 'sha256'), 'hex');
+    -- 2. Hash the raw token (casting raw_token to bytea for digest)
+    v_token_hash := encode(extensions.digest(raw_token::bytea, 'sha256'), 'hex');
 
     -- 3. Look up and validate pin_item
     SELECT pi.id, pi.status, pi.design_id

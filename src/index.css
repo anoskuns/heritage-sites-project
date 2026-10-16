@@ -1,5 +1,29 @@
+@import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,300;1,400;1,600;1,700&family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&subset=vietnamese,latin-ext&display=swap');
 @import "tailwindcss";
 @import "maplibre-gl/dist/maplibre-gl.css";
+
+@theme {
+  --font-serif: 'Lora', 'Playfair Display', 'Merriweather', Georgia, serif;
+  --font-sans: 'Be Vietnam Pro', 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+/* Explicit CSS rules to ensure bulletproof Vietnamese rendering without clipping or fallback glitches */
+html, body {
+  font-family: 'Be Vietnam Pro', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background-color: #F7F0E2;
+  color: #2D2723;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+.font-serif {
+  font-family: 'Lora', 'Playfair Display', 'Merriweather', Georgia, serif !important;
+}
+
+.font-sans {
+  font-family: 'Be Vietnam Pro', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+}
 
 /* MapLibre map styles */
 .maplibregl-map {

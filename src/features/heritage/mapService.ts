@@ -1,4 +1,8 @@
 import { supabase } from '../../services/supabase/client'
+import {
+  getLocalUnlockedStamps,
+  isThangLongIdentifier,
+} from '../passport/passportStorageService'
 
 export interface MapSiteItem {
   id: string
@@ -304,7 +308,13 @@ function getAreaMetadata(slug: string): { areaSlug: string; regionSlug: string; 
 export async function fetchRegionsWithAreas(userId?: string): Promise<RegionItem[]> {
   try {
     // 1. Fetch user passport unlocked sites
+    const { data: authData } = await supabase.auth.getUser()
+    const isDemoUser =
+      authData.user?.email?.toLowerCase().includes('demo@heritage.vn') ||
+      authData.user?.email?.toLowerCase().startsWith('demo@')
+
     const unlockedSiteIds = new Set<string>()
+    const unlockedSlugs = new Set<string>()
     if (userId) {
       const { data: entries } = await supabase
         .from('passport_entries')
@@ -312,8 +322,26 @@ export async function fetchRegionsWithAreas(userId?: string): Promise<RegionItem
         .eq('user_id', userId)
       if (entries) {
         for (const e of entries) {
+          if (isDemoUser && isThangLongIdentifier(e.site_id)) continue
           unlockedSiteIds.add(e.site_id)
         }
+      }
+    }
+
+    // Merge locally registered/cached stamps
+    const localStamps = getLocalUnlockedStamps(userId)
+    for (const ls of localStamps) {
+      if (
+        isDemoUser &&
+        (isThangLongIdentifier(ls.siteId) ||
+          isThangLongIdentifier(ls.siteSlug) ||
+          isThangLongIdentifier(ls.rawToken))
+      ) {
+        continue
+      }
+      unlockedSiteIds.add(ls.siteId)
+      if (ls.siteSlug) {
+        unlockedSlugs.add(ls.siteSlug)
       }
     }
 
@@ -348,7 +376,7 @@ export async function fetchRegionsWithAreas(userId?: string): Promise<RegionItem
       // Fetch sites to calculate accurate counts per area
       const { data: allDbSites } = await supabase
         .from('heritage_sites')
-        .select('id, area_id')
+        .select('id, area_id, slug')
         .eq('is_published', true)
 
       return dbRegions.map((r: any) => {
@@ -360,7 +388,9 @@ export async function fetchRegionsWithAreas(userId?: string): Promise<RegionItem
 
         const mappedAreas: AreaItem[] = sortedAreas.map((a: any) => {
           const areaSites = allDbSites ? allDbSites.filter((s: any) => s.area_id === a.id) : []
-          const aUnlocked = areaSites.filter((s: any) => unlockedSiteIds.has(s.id)).length
+          const aUnlocked = areaSites.filter(
+            (s: any) => unlockedSiteIds.has(s.id) || unlockedSlugs.has(s.slug)
+          ).length
           regionUnlocked += aUnlocked
           regionTotal += areaSites.length
 
@@ -395,27 +425,88 @@ export async function fetchRegionsWithAreas(userId?: string): Promise<RegionItem
       })
     }
 
+    // Load local custom published sites
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let localCustomSites: any[] = []
+    try {
+      const raw = localStorage.getItem('heritage_admin_custom_sites_v2')
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (Array.isArray(parsed)) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          localCustomSites = parsed.filter((s: any) => s.is_published)
+        }
+      }
+    } catch {
+      // ignore
+    }
+
     // 3. Fallback to OFFICIAL_REGIONS if database tables are not yet created on remote
     return OFFICIAL_REGIONS.map((r) => {
       let regionUnlocked = 0
+      let regionTotal = 0
       const mappedAreas = r.areas.map((a) => {
         let aUnlocked = 0
+        let aTotal = a.siteCount
+
+        // Add custom sites matching this area
+        const customForArea = localCustomSites.filter((cs) => {
+          if (cs.area_id === a.id || cs.area_id === a.slug) return true
+          if (cs.latitude && cs.longitude) {
+            const d = (Number(cs.latitude) - a.centerLat) ** 2 + (Number(cs.longitude) - a.centerLng) ** 2
+            return d < 0.2
+          }
+          return false
+        })
+        aTotal += customForArea.length
+
         if (a.slug === 'tp-ho-chi-minh') {
-          aUnlocked = HCM_HERITAGE_SITES.filter((s) => unlockedSiteIds.has(s.id)).length
+          aUnlocked = HCM_HERITAGE_SITES.filter(
+            (s) => unlockedSiteIds.has(s.id) || unlockedSlugs.has(s.slug)
+          ).length
         } else if (a.slug === 'ha-noi') {
-          aUnlocked = unlockedSiteIds.has('b1b2c3d4-0001-4000-b000-000000000001') ? 1 : 0
+          aUnlocked =
+            unlockedSiteIds.has('b1b2c3d4-0001-4000-b000-000000000001') ||
+            unlockedSlugs.has('hoang-thanh-thang-long')
+              ? 1
+              : 0
         } else if (a.slug === 'quang-nam') {
-          aUnlocked = unlockedSiteIds.has('b1b2c3d4-0002-4000-b000-000000000002') ? 1 : 0
+          aUnlocked =
+            unlockedSiteIds.has('b1b2c3d4-0002-4000-b000-000000000002') ||
+            unlockedSlugs.has('pho-co-hoi-an')
+              ? 1
+              : 0
         } else if (a.slug === 'thua-thien-hue') {
-          aUnlocked = unlockedSiteIds.has('b1b2c3d4-0003-4000-b000-000000000003') ? 1 : 0
+          aUnlocked =
+            unlockedSiteIds.has('b1b2c3d4-0003-4000-b000-000000000003') ||
+            unlockedSlugs.has('dai-noi-hue')
+              ? 1
+              : 0
         } else if (a.slug === 'quang-ninh') {
-          aUnlocked = unlockedSiteIds.has('b1b2c3d4-0004-4000-b000-000000000004') ? 1 : 0
+          aUnlocked =
+            unlockedSiteIds.has('b1b2c3d4-0004-4000-b000-000000000004') ||
+            unlockedSlugs.has('vinh-ha-long')
+              ? 1
+              : 0
         }
+
+        const customUnlocked = customForArea.filter(
+          (cs) => unlockedSiteIds.has(cs.id) || unlockedSlugs.has(cs.slug)
+        ).length
+        aUnlocked += customUnlocked
+
         regionUnlocked += aUnlocked
-        return { ...a, unlockedCount: aUnlocked }
+        regionTotal += aTotal
+        return {
+          ...a,
+          siteCount: aTotal,
+          unlockedCount: aUnlocked,
+          isActive: aTotal > 0,
+        }
       })
       return {
         ...r,
+        siteCount: regionTotal,
         unlockedCount: regionUnlocked,
         areas: mappedAreas,
       }
@@ -431,6 +522,11 @@ export async function fetchRegionsWithAreas(userId?: string): Promise<RegionItem
  */
 export async function fetchMapSites(userId?: string, areaSlug?: string): Promise<MapDataResult> {
   // 1. Fetch user's unlocked passport entries
+  const { data: authData } = await supabase.auth.getUser()
+  const isDemoUser =
+    authData.user?.email?.toLowerCase().includes('demo@heritage.vn') ||
+    authData.user?.email?.toLowerCase().startsWith('demo@')
+
   const unlockedMap = new Map<string, string>()
   if (userId) {
     const { data: entries } = await supabase
@@ -440,8 +536,26 @@ export async function fetchMapSites(userId?: string, areaSlug?: string): Promise
 
     if (entries) {
       for (const entry of entries) {
+        if (isDemoUser && isThangLongIdentifier(entry.site_id)) continue
         unlockedMap.set(entry.site_id, entry.unlocked_at)
       }
+    }
+  }
+
+  // Merge locally registered/cached stamps
+  const rawLocalStamps = getLocalUnlockedStamps(userId)
+  const localStamps = isDemoUser
+    ? rawLocalStamps.filter(
+        (ls) =>
+          !isThangLongIdentifier(ls.siteId) &&
+          !isThangLongIdentifier(ls.siteSlug) &&
+          !isThangLongIdentifier(ls.rawToken)
+      )
+    : rawLocalStamps
+
+  for (const ls of localStamps) {
+    if (!unlockedMap.has(ls.siteId)) {
+      unlockedMap.set(ls.siteId, ls.unlockedAt)
     }
   }
 
@@ -533,8 +647,11 @@ export async function fetchMapSites(userId?: string, areaSlug?: string): Promise
         }
       }
 
-      const isUnlocked = unlockedMap.has(site.id)
-      const unlockedAt = unlockedMap.get(site.id)
+      const isUnlocked =
+        unlockedMap.has(site.id) || localStamps.some((ls) => ls.siteSlug === site.slug)
+      const unlockedAt =
+        unlockedMap.get(site.id) ||
+        localStamps.find((ls) => ls.siteSlug === site.slug)?.unlockedAt
 
       // Use database relation if available, otherwise fallback to static metadata
       let itemAreaSlug: string
@@ -580,13 +697,104 @@ export async function fetchMapSites(userId?: string, areaSlug?: string): Promise
     }
   }
 
+  // 2.5. Merge locally created/custom sites from Admin portal
+  try {
+    const rawCustom = localStorage.getItem('heritage_admin_custom_sites_v2')
+    if (rawCustom) {
+      const customSites = JSON.parse(rawCustom)
+      if (Array.isArray(customSites)) {
+        for (const cs of customSites) {
+          if (!cs.is_published || loadedSlugs.has(cs.slug)) continue
+          loadedSlugs.add(cs.slug)
+
+          const isUnlocked =
+            unlockedMap.has(cs.id) || localStamps.some((ls) => ls.siteSlug === cs.slug)
+          const unlockedAt =
+            unlockedMap.get(cs.id) ||
+            localStamps.find((ls) => ls.siteSlug === cs.slug)?.unlockedAt
+
+          let cAreaSlug = 'tp-ho-chi-minh'
+          let cRegionSlug = 'nam'
+          let cAreaNameVi = 'Thành phố Hồ Chí Minh'
+          let cAreaNameEn = 'Ho Chi Minh City'
+
+          // Match area by area_id or coordinates
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          let matchedArea: any = null
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          let matchedRegion: any = null
+
+          if (cs.area_id) {
+            for (const r of OFFICIAL_REGIONS) {
+              const a = r.areas.find((ar) => ar.id === cs.area_id || ar.slug === cs.area_id)
+              if (a) {
+                matchedArea = a
+                matchedRegion = r
+                break
+              }
+            }
+          }
+
+          if (!matchedArea && cs.latitude && cs.longitude) {
+            let minDist = Number.POSITIVE_INFINITY
+            for (const r of OFFICIAL_REGIONS) {
+              for (const a of r.areas) {
+                const d =
+                  (Number(cs.latitude) - a.centerLat) ** 2 +
+                  (Number(cs.longitude) - a.centerLng) ** 2
+                if (d < minDist) {
+                  minDist = d
+                  matchedArea = a
+                  matchedRegion = r
+                }
+              }
+            }
+          }
+
+          if (matchedArea && matchedRegion) {
+            cAreaSlug = matchedArea.slug
+            cRegionSlug = matchedRegion.slug
+            cAreaNameVi = matchedArea.nameVi
+            cAreaNameEn = matchedArea.nameEn
+          }
+
+          sites.push({
+            id: cs.id,
+            slug: cs.slug,
+            nameVi: cs.name_vi,
+            nameEn: cs.name_en,
+            descriptionVi: cs.description_vi,
+            descriptionEn: cs.description_en,
+            latitude: Number(cs.latitude),
+            longitude: Number(cs.longitude),
+            coverImageUrl: cs.cover_image_url,
+            isUnlocked,
+            unlockedAt,
+            areaSlug: cAreaSlug,
+            regionSlug: cRegionSlug,
+            areaNameVi: cAreaNameVi,
+            areaNameEn: cAreaNameEn,
+            address: cs.source_reference || `${cAreaNameVi}`,
+          })
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[MapService] Error merging custom local sites:', err)
+  }
+
   // 3. Always ensure all 7 HCMC sites are present
   for (const hcm of HCM_HERITAGE_SITES) {
     if (!loadedSlugs.has(hcm.slug)) {
+      const isHcmUnlocked =
+        unlockedMap.has(hcm.id) || localStamps.some((ls) => ls.siteSlug === hcm.slug)
+      const hcmUnlockedAt =
+        unlockedMap.get(hcm.id) ||
+        localStamps.find((ls) => ls.siteSlug === hcm.slug)?.unlockedAt
       sites.push({
         ...hcm,
-        isUnlocked: unlockedMap.has(hcm.id),
-        unlockedAt: unlockedMap.get(hcm.id),
+        isUnlocked: isHcmUnlocked,
+        unlockedAt: hcmUnlockedAt,
       })
     } else {
       // Enrich existing site with address if missing

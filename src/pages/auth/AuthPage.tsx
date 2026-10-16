@@ -3,10 +3,13 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Landmark, Mail, Lock, User as UserIcon, AlertCircle, CheckCircle2, ArrowRight, Sparkles } from 'lucide-react'
 import { useAuth, getSafeRedirectUrl } from '../../features/authentication'
 import { useTranslation } from '../../i18n'
+import { useDemoMode } from '../../services/demoModeService'
+import { purgeThangLongStrayCache } from '../../features/passport'
 
 export function AuthPage() {
   const { user, signIn, signUp, isLoading: isAuthLoading } = useAuth()
   const { t, language } = useTranslation()
+  const { isDemoMode, toggleDemoMode } = useDemoMode()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
 
@@ -97,6 +100,15 @@ export function AuthPage() {
             setErrorMessage(result.error || t.auth.authErrorGeneric)
           }
           return
+        }
+
+        // Clean up stray demo cache if signing into demo account
+        if (trimmedEmail.toLowerCase() === 'demo@heritage.vn') {
+          try {
+            await purgeThangLongStrayCache()
+          } catch {
+            // ignore
+          }
         }
 
         // Successful sign-in -> navigate to safe destination
@@ -202,26 +214,37 @@ export function AuthPage() {
             </div>
           )}
 
-          {/*Quick Demo Credentials Panel*/}
-          {!isSignUp && (
-            <div className="p-3.5 rounded-2xl bg-amber-50/80 border border-amber-200/80 text-xs space-y-2">
+          {/* Quick Demo Credentials Panel (Only visible in Demo/QA Mode) */}
+          {!isSignUp && isDemoMode && (
+            <div className="p-3.5 rounded-2xl bg-amber-50/90 border border-amber-300 text-xs space-y-2 animate-fadeIn shadow-xs">
               <div className="flex items-center justify-between">
                 <span className="font-semibold text-amber-900 flex items-center gap-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-amber-700" />
                   <span>{t.auth.demoAccountTitle}</span>
                 </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEmail('demo@heritage.vn')
-                    setPassword('DemoPassword123!')
-                    setErrorMessage(null)
-                    setInfoMessage(null)
-                  }}
-                  className="px-2.5 py-1 rounded-lg bg-amber-800 hover:bg-amber-900 active:scale-95 text-white text-[11px] font-semibold transition-all cursor-pointer shadow-xs"
-                >
-                  {t.auth.fillDemoCta}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmail('demo@heritage.vn')
+                      setPassword('DemoPassword123!')
+                      setErrorMessage(null)
+                      setInfoMessage(null)
+                      void purgeThangLongStrayCache()
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-amber-800 hover:bg-amber-900 active:scale-95 text-white text-[11px] font-semibold transition-all cursor-pointer shadow-xs"
+                  >
+                    {t.auth.fillDemoCta}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={toggleDemoMode}
+                    className="text-[10px] text-amber-700 hover:text-red-700 underline cursor-pointer"
+                    title="Ẩn thông tin tài khoản mẫu"
+                  >
+                    Ẩn
+                  </button>
+                </div>
               </div>
               <div className="text-[11px] text-amber-900/90 font-mono space-y-0.5">
                 <p>Email: <span className="font-semibold">demo@heritage.vn</span></p>
@@ -231,7 +254,6 @@ export function AuthPage() {
                 {t.auth.demoNote}
               </p>
             </div>
-
           )}
 
           {/* Email */}

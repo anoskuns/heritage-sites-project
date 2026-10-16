@@ -25,6 +25,7 @@ export function MapPage() {
   // URL search query synchronization
   const areaParam = searchParams.get('area')
   const regionParam = searchParams.get('region') || 'nam'
+  const highlightSiteId = searchParams.get('highlightSite')
 
   const loadData = useCallback(async () => {
     setIsLoading(true)
@@ -43,6 +44,23 @@ export function MapPage() {
       setIsLoading(false)
     }
   }, [user, t])
+
+  // Listen to unlock / revoke event for immediate real-time map data sync
+  useEffect(() => {
+    const handleUnlockedEvent = () => {
+      loadData()
+    }
+    window.addEventListener('heritage_site_unlocked', handleUnlockedEvent)
+    window.addEventListener('heritage_passport_revoked', handleUnlockedEvent)
+    window.addEventListener('passport_stamp_revoked', handleUnlockedEvent)
+    window.addEventListener('heritage_sites_updated', handleUnlockedEvent)
+    return () => {
+      window.removeEventListener('heritage_site_unlocked', handleUnlockedEvent)
+      window.removeEventListener('heritage_passport_revoked', handleUnlockedEvent)
+      window.removeEventListener('passport_stamp_revoked', handleUnlockedEvent)
+      window.removeEventListener('heritage_sites_updated', handleUnlockedEvent)
+    }
+  }, [loadData])
 
   useEffect(() => {
     let ignore = false
@@ -152,6 +170,7 @@ export function MapPage() {
           centerLat={currentAreaInfo?.area.centerLat}
           centerLng={currentAreaInfo?.area.centerLng}
           defaultZoom={currentAreaInfo?.area.defaultZoom}
+          initialSelectedSiteId={highlightSiteId}
           sites={areaSites}
           onBack={handleBackToOverview}
           onExploreHcm={() => handleSelectArea('tp-ho-chi-minh', 'nam')}

@@ -10,9 +10,21 @@ import { HeritageDetailPage } from '../pages/heritage-detail/HeritageDetailPage'
 import { CommunityPage } from '../pages/community/CommunityPage'
 import { CreatePostPage } from '../pages/create-post/CreatePostPage'
 import { ProfilePage } from '../pages/profile/ProfilePage'
-import { ProtectedRoute } from '../features/authentication'
+import { AdminPage } from '../pages/admin'
+import { ProtectedRoute, AdminRoute } from '../features/authentication'
+import { AppProviders } from './providers'
 
 const router = createBrowserRouter([
+  {
+    path: '/admin',
+    element: (
+      <AppProviders>
+        <AdminRoute>
+          <AdminPage />
+        </AdminRoute>
+      </AppProviders>
+    ),
+  },
   {
     path: '/',
     element: <App />,

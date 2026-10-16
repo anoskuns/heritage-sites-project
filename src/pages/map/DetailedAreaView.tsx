@@ -11,6 +11,7 @@ import {
   Layers,
   ChevronRight,
   ExternalLink,
+  BookOpen,
 } from 'lucide-react'
 import { useTranslation } from '../../i18n'
 import type { MapSiteItem } from '../../features/heritage'
@@ -27,6 +28,7 @@ interface DetailedAreaViewProps {
   centerLat?: number
   centerLng?: number
   defaultZoom?: number
+  initialSelectedSiteId?: string | null
   onBack: () => void
   onExploreHcm?: () => void
 }
@@ -39,6 +41,7 @@ export function DetailedAreaView({
   centerLat,
   centerLng,
   defaultZoom = 13,
+  initialSelectedSiteId,
   onBack,
   onExploreHcm,
 }: DetailedAreaViewProps) {
@@ -46,7 +49,18 @@ export function DetailedAreaView({
 
   const [filter, setFilter] = useState<FilterType>('all')
   const [viewMode, setViewMode] = useState<'detail' | 'list'>('detail')
-  const [selectedSiteId, setSelectedSiteId] = useState<string | null>(sites[0]?.id ?? null)
+  const [selectedSiteId, setSelectedSiteId] = useState<string | null>(
+    initialSelectedSiteId ?? sites[0]?.id ?? null
+  )
+  const [prevInitialId, setPrevInitialId] = useState<string | null | undefined>(
+    initialSelectedSiteId
+  )
+
+  if (initialSelectedSiteId && initialSelectedSiteId !== prevInitialId) {
+    setPrevInitialId(initialSelectedSiteId)
+    setSelectedSiteId(initialSelectedSiteId)
+    setViewMode('detail')
+  }
 
   const selectedSite = useMemo(() => {
     if (viewMode === 'list') return null
@@ -288,13 +302,23 @@ export function DetailedAreaView({
                   <ExternalLink className="w-4 h-4" />
                 </Link>
 
-                <Link
-                  to="/unlock"
-                  className="inline-flex items-center justify-center gap-2 py-3 px-4 rounded-2xl bg-amber-50 hover:bg-amber-100 text-amber-950 border border-amber-300 text-sm font-bold transition-all"
-                >
-                  <QrCode className="w-4 h-4 text-amber-700" />
-                  <span>{language === 'vi' ? 'Quét QR Mở khóa' : 'Scan QR to Unlock'}</span>
-                </Link>
+                {selectedSite.isUnlocked ? (
+                  <Link
+                    to="/passport"
+                    className="inline-flex items-center justify-center gap-2 py-3 px-4 rounded-2xl bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-300 text-sm font-bold transition-all shadow-xs"
+                  >
+                    <BookOpen className="w-4 h-4 text-emerald-700" />
+                    <span>{language === 'vi' ? 'Đã mở khóa (Xem Hộ chiếu)' : 'Unlocked (View Passport)'}</span>
+                  </Link>
+                ) : (
+                  <Link
+                    to="/unlock"
+                    className="inline-flex items-center justify-center gap-2 py-3 px-4 rounded-2xl bg-amber-50 hover:bg-amber-100 text-amber-950 border border-amber-300 text-sm font-bold transition-all shadow-xs"
+                  >
+                    <QrCode className="w-4 h-4 text-amber-700" />
+                    <span>{language === 'vi' ? 'Quét mã mở khóa' : 'Scan to Unlock'}</span>
+                  </Link>
+                )}
               </div>
             </div>
           ) : (

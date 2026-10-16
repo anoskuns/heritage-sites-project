@@ -1,13 +1,14 @@
 import { Link } from 'react-router-dom'
-import { Award, Camera, Calendar, ArrowUpRight } from 'lucide-react'
+import { Award, Camera, Calendar, ArrowUpRight, RotateCcw } from 'lucide-react'
 import type { PassportItem } from './passportService'
 import { useTranslation } from '../../i18n'
 
 interface PassportStampCardProps {
   item: PassportItem
+  onRevoke?: (item: PassportItem) => void
 }
 
-export function PassportStampCard({ item }: PassportStampCardProps) {
+export function PassportStampCard({ item, onRevoke }: PassportStampCardProps) {
   const { t, language } = useTranslation()
 
   const siteName = language === 'vi' ? item.nameVi : item.nameEn
@@ -44,11 +45,27 @@ export function PassportStampCard({ item }: PassportStampCardProps) {
           </div>
         </div>
 
-        {collectionName && (
-          <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200/80 truncate max-w-[130px]">
-            {collectionName}
-          </span>
-        )}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {collectionName && (
+            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200/80 truncate max-w-[120px]">
+              {collectionName}
+            </span>
+          )}
+          {onRevoke && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                onRevoke(item)
+              }}
+              title={language === 'vi' ? 'Thu hồi con dấu (để test lại)' : 'Revoke stamp (QA test)'}
+              className="p-1.5 rounded-lg border border-red-200 bg-red-50 hover:bg-red-100 text-red-700 transition-colors cursor-pointer"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Image Thumbnail */}
@@ -59,6 +76,13 @@ export function PassportStampCard({ item }: PassportStampCardProps) {
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+
+        {/* Floating serialized physical item badge */}
+        {item.serialCode && (
+          <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-[#8B2E1E]/90 backdrop-blur-xs text-[#FAF6EE] text-[10px] font-mono font-bold tracking-wider shadow-xs flex items-center gap-1 border border-[#D6AD60]/50 z-10">
+            <span>#{item.serialCode}</span>
+          </div>
+        )}
 
         {/* Floating memories count badge */}
         <div className="absolute bottom-2 right-2 px-2 py-1 rounded-lg bg-black/70 backdrop-blur-xs text-white text-[11px] font-medium flex items-center gap-1 shadow-xs">
